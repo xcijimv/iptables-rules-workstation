@@ -1,0 +1,85 @@
+*filter
+:INPUT   DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT  DROP [0:0]
+
+###
+# allow localhost
+###
+
+-A  INPUT -i lo -j ACCEPT
+-A OUTPUT -o lo -j ACCEPT
+
+###
+# block incoming (to catch before reaching the logging rules)
+###
+
+# block invalid
+-A  INPUT -m conntrack --ctstate INVALID -j DROP
+# block ping
+-A  INPUT -p icmp -m icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
+# block multicast
+-A  INPUT -m pkttype --pkt-type multicast -j DROP
+# block netbios
+-A  INPUT -p udp --dport   137 -j DROP
+-A  INPUT -p udp --dport   138 -j DROP
+# block UPnP
+-A  INPUT -p udp --dport  1900 -j DROP
+
+###
+# block outgoing (to catch before reaching the logging rules)
+###
+
+# block outgoing dns prefetch pings
+-A OUTPUT -p icmp -m icmp --icmp-type 3 -j REJECT
+
+###
+# allow servicies
+###
+
+# dhcp
+-A OUTPUT -p udp --sport 68    --dport 67    -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p udp --dport 67:68 --sport 67:68 -m state --state     ESTABLISHED -j ACCEPT
+# ntp
+-A OUTPUT -p udp --dport   123 -m state --state NEW,ESTABLISHED -m owner --uid-owner systemd-timesync -j ACCEPT
+-A  INPUT -p udp --sport   123 -m state --state     ESTABLISHED -j ACCEPT
+# ntp
+-A OUTPUT -p udp --dport   123 -m state --state NEW,ESTABLISHED -m owner --uid-owner systemd-timesync -j ACCEPT
+-A  INPUT -p udp --sport   123 -m state --state     ESTABLISHED -j ACCEPT
+# dns
+-A OUTPUT -p udp --dport    53 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p udp --sport    53 -m state --state     ESTABLISHED -j ACCEPT
+-A OUTPUT -p tcp --dport    53 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p tcp --sport    53 -m state --state     ESTABLISHED -j ACCEPT
+# dnscrypt-proxy
+#-A OUTPUT -p tcp --dport   443 -m state --state NEW,ESTABLISHED -j ACCEPT
+#-A  INPUT -p tcp --sport   443 -m state --state     ESTABLISHED -j ACCEPT
+-A OUTPUT -p udp --dport   443 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p udp --sport   443 -m state --state     ESTABLISHED -j ACCEPT
+# web
+-A OUTPUT -p tcp --dport    80 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p tcp --sport    80 -m state --state     ESTABLISHED -j ACCEPT
+-A OUTPUT -p tcp --dport   443 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p tcp --sport   443 -m state --state     ESTABLISHED -j ACCEPT
+# ssh
+-A OUTPUT -p tcp --dport    22 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p tcp --sport    22 -m state --state     ESTABLISHED -j ACCEPT
+# git
+-A OUTPUT -p tcp --dport  9418 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p tcp --sport  9418 -m state --state     ESTABLISHED -j ACCEPT
+# irc
+-A OUTPUT -p tcp --dport  6697 -m state --state NEW,ESTABLISHED -j ACCEPT
+-A  INPUT -p tcp --sport  6697 -m state --state     ESTABLISHED -j ACCEPT
+
+###
+# log connections that fell through the above rules
+###
+
+-A INPUT  -m limit --limit 5/min -j LOG --log-prefix "iptables denied: " --log-level 7
+-A OUTPUT -m limit --limit 5/min -j LOG --log-prefix "iptables denied: " --log-level 7
+
+-A INPUT -p tcp -j REJECT --reject-with tcp-reset
+-A INPUT -p udp -j REJECT --reject-with icmp-port-unreachable
+-A INPUT        -j REJECT --reject-with icmp-proto-unreachable
+
+COMMIT
